@@ -1,5 +1,11 @@
 # Apple Camera Driver Implementation Progress
 
+## Apple API trace
+
+- [x] Adapter use of Apple capture families is recorded
+- [x] Native-format and frame-rate partial branches have source markers
+- [x] Remaining hot-plug, interruption, pressure, and orientation work is tracked
+
 ## Required implementation
 
 - [x] macOS camera authorization mapping

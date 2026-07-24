@@ -133,6 +133,10 @@ struct AppleCameraSnapshotFactory: Sendable {
       kCVPixelFormatType_32BGRA:
       return [nativeSubtype]
     default:
+      // FIXME(INCOMPLETE_IMPLEMENTATION): Discovery currently exposes only native
+      // NV12 or BGRA formats that the production bridge can route without a
+      // payload copy. It must not advertise other formats until an explicit
+      // conversion capability and its copy/allocation budget are implemented.
       return []
     }
   }

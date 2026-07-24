@@ -52,6 +52,10 @@ actor AppleCameraDeviceHandle: CaptureDeviceHandle {
         formatID: configuration.formatID
       )
     }
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The production Apple camera path currently
+    // applies the advertised native format without changing device duration.
+    // It must not accept an explicit frame rate until the driver validates the
+    // active format range and applies matching min/max frame durations.
     if let frameRate = configuration.frameRate {
       throw .unsupportedFrameRate(
         deviceID: configuration.deviceID,

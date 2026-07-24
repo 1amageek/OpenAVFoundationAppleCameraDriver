@@ -25,3 +25,6 @@ are validated before delivery, and terminal delivery state stops the native
 capture session without synchronously stopping AVFoundation from its callback.
 See [LOW_LEVEL_PIPELINE.md](LOW_LEVEL_PIPELINE.md) for ownership, allocation, and
 future move-only and GPU presentation boundaries.
+
+See [APPLE_API_TRACE.md](APPLE_API_TRACE.md) for the Apple capture families used
+by this adapter and the remaining partial behavior.
