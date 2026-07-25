@@ -145,8 +145,10 @@ final class AppleSampleBufferDelivery: Sendable {
 
     func shutdown() {
         _ = stopDelivery()
-        // CaptureSampleSink is contractually nonblocking. Waiting here closes
-        // the explicit shutdown boundary without retaining queued frame leases.
+        // CaptureSampleSink.offer is synchronous and includes callback
+        // processing time. Sinks must return promptly and keep unbounded I/O
+        // off this path; waiting here closes the explicit shutdown boundary
+        // after every accepted in-flight callback returns.
         inFlightOffers.wait()
     }
 
