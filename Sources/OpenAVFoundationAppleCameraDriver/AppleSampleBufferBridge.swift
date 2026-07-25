@@ -8,10 +8,7 @@ struct AppleSampleBufferBridge: Sendable {
   typealias ImageBuffer = AppleCameraPixelBuffer
   typealias FormatDescription =
     OpenCoreMedia.CMImmutableVideoFormatDescription
-  typealias SampleBuffer = OpenCoreMedia.CMImageSampleBuffer<
-    ImageBuffer,
-    FormatDescription
-  >
+  typealias SampleBuffer = OpenCoreMedia.CMImageSampleBuffer
 
   private let expectedDimensions: OpenCoreVideo.CVPixelDimensions
   private let expectedPixelFormat: OpenCoreVideo.CVPixelFormatType
@@ -93,6 +90,14 @@ struct AppleSampleBufferBridge: Sendable {
     } catch {
       throw .pixelBuffer(error)
     }
+    do {
+      try AppleAttachmentBridge.copyImageAttachments(
+        from: pixelBuffer,
+        to: imageBuffer.attachments
+      )
+    } catch {
+      throw .attachment(error)
+    }
 
     let timing = OpenCoreMedia.CMSampleTimingInfo(
       duration: Self.portableTime(
@@ -105,8 +110,9 @@ struct AppleSampleBufferBridge: Sendable {
         CMSampleBufferGetDecodeTimeStamp(sampleBuffer)
       )
     )
+    let sample: SampleBuffer
     do {
-      return try SampleBuffer(
+      sample = try SampleBuffer(
         imageBuffer: imageBuffer,
         formatDescription: formatDescription,
         timing: [timing]
@@ -114,9 +120,18 @@ struct AppleSampleBufferBridge: Sendable {
     } catch {
       throw .sampleBuffer(error)
     }
+    do {
+      try AppleAttachmentBridge.copySampleAttachments(
+        from: sampleBuffer,
+        to: sample
+      )
+      return sample
+    } catch {
+      throw .attachment(error)
+    }
   }
 
-  private static func portableTime(
+  static func portableTime(
     _ time: CoreMedia.CMTime
   ) -> OpenCoreMedia.CMTime {
     OpenCoreMedia.CMTime(
@@ -142,6 +157,7 @@ enum AppleSampleBridgeError: Error, Sendable {
   )
   case pixelBuffer(OpenCoreVideo.CVPixelBufferError)
   case sampleBuffer(OpenCoreMedia.CMSampleBufferError)
+  case attachment(AppleAttachmentBridgeError)
 
   var code: Int64 {
     switch self {
@@ -157,6 +173,8 @@ enum AppleSampleBridgeError: Error, Sendable {
       2_005
     case .sampleBuffer:
       2_006
+    case .attachment:
+      2_007
     }
   }
 }

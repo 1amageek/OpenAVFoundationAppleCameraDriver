@@ -1,68 +1,61 @@
 import OpenAVFoundationDriver
 
 actor AppleCameraDeviceHandle: CaptureDeviceHandle {
-  private let driverID: CaptureDriverID
-  private let reference: AppleCaptureDeviceReference
+  private enum OperationPhase {
+    case idle
+    case operating
+    case shutdown
+  }
+
   private let snapshotValue: CaptureDeviceSnapshot
+  private let backend: any AppleCameraDeviceBackend
   private let failureHandler: @Sendable (CaptureDriverError) -> Void
 
   private var configuration: CaptureDeviceConfiguration?
-  private var isShutdown = false
+  private var phase = OperationPhase.idle
 
   init(
-    driverID: CaptureDriverID,
-    reference: AppleCaptureDeviceReference,
     snapshot: CaptureDeviceSnapshot,
+    backend: any AppleCameraDeviceBackend,
     failureHandler:
       @escaping @Sendable (CaptureDriverError) -> Void
   ) {
-    self.driverID = driverID
-    self.reference = reference
     snapshotValue = snapshot
+    self.backend = backend
     self.failureHandler = failureHandler
   }
 
-  func snapshot() throws(CaptureDriverError) -> CaptureDeviceSnapshot {
-    try requireAvailable()
+  func snapshot() async throws(CaptureDriverError)
+    -> CaptureDeviceSnapshot
+  {
+    try beginOperation()
+    defer { finishOperation() }
+    try await backend.requireAvailable()
     return snapshotValue
   }
 
   func configure(
     _ configuration: CaptureDeviceConfiguration
-  ) throws(CaptureDriverError) -> CaptureDeviceSnapshot {
-    try requireAvailable()
+  ) async throws(CaptureDriverError) -> CaptureDeviceSnapshot {
+    try beginOperation()
+    defer { finishOperation() }
+    try await backend.requireAvailable()
     let capabilities = snapshotValue.capabilities
-    guard configuration.deviceID == capabilities.deviceID else {
-      throw .deviceNotFound(configuration.deviceID)
-    }
-    guard configuration.capabilityRevision == capabilities.revision else {
-      throw .staleCapabilities(
-        deviceID: configuration.deviceID,
-        expectedRevision: configuration.capabilityRevision,
-        actualRevision: capabilities.revision
-      )
-    }
-    guard
-      capabilities.formats.contains(
-        where: { $0.formatID == configuration.formatID }
-      )
-    else {
+    _ = try capabilities.validatedConfiguration(configuration)
+    guard let format = capabilities.formats.first(
+      where: { $0.formatID == configuration.formatID }
+    ) else {
       throw .unsupportedFormat(
         deviceID: configuration.deviceID,
         formatID: configuration.formatID
       )
     }
-    // FIXME(INCOMPLETE_IMPLEMENTATION): The production Apple camera path currently
-    // applies the advertised native format without changing device duration.
-    // It must not accept an explicit frame rate until the driver validates the
-    // active format range and applies matching min/max frame durations.
-    if let frameRate = configuration.frameRate {
-      throw .unsupportedFrameRate(
-        deviceID: configuration.deviceID,
-        formatID: configuration.formatID,
-        frameRate: frameRate
-      )
-    }
+
+    try await backend.configure(
+      format: format,
+      frameRate: configuration.frameRate,
+      controls: configuration.controls
+    )
     self.configuration = configuration
     return snapshotValue
   }
@@ -70,8 +63,10 @@ actor AppleCameraDeviceHandle: CaptureDeviceHandle {
   func stream(
     for request: CaptureStreamRequest,
     sink: any CaptureSampleSink
-  ) throws(CaptureDriverError) -> any CaptureStream {
-    try requireAvailable()
+  ) async throws(CaptureDriverError) -> any CaptureStream {
+    try beginOperation()
+    defer { finishOperation() }
+    try await backend.requireAvailable()
     guard let configuration,
       configuration == request.configuration
     else {
@@ -89,34 +84,64 @@ actor AppleCameraDeviceHandle: CaptureDeviceHandle {
         formatID: configuration.formatID
       )
     }
-    let runtime = try AppleCameraRuntime(
-      driverID: driverID,
-      deviceID: snapshotValue.descriptor.deviceID,
+    _ = try snapshotValue.capabilities.validatedStreamRequest(request)
+    let streamID: CaptureStreamID
+    if let requestedStreamID = request.streamID {
+      streamID = requestedStreamID
+    } else if let preferredStream = snapshotValue.capabilities.streams.first(
+      where: { $0.formatIDs.contains(configuration.formatID) }
+    ) {
+      streamID = preferredStream.streamID
+    } else {
+      throw .unsupportedStreamCombination(
+        deviceID: configuration.deviceID,
+        streamIDs: []
+      )
+    }
+
+    return try await backend.stream(
       format: format,
-      device: reference,
+      streamID: streamID,
+      connectionConfiguration: request.videoConnectionConfiguration,
       sink: sink,
       failureHandler: failureHandler
     )
-    return AppleCameraStream(
-      deviceID: snapshotValue.descriptor.deviceID,
-      runtime: runtime
-    )
   }
 
-  func shutdown() {
-    isShutdown = true
-    configuration = nil
+  func shutdown() async throws(CaptureDriverError) {
+    guard phase != .shutdown else {
+      return
+    }
+    try beginOperation()
+    do {
+      try await backend.shutdown()
+      configuration = nil
+      phase = .shutdown
+    } catch {
+      // A backend shutdown error can report cleanup failure after the native
+      // resource has already become unavailable. Keep this handle terminal so
+      // no later operation can commit state against a partially closed backend.
+      configuration = nil
+      phase = .shutdown
+      throw error
+    }
   }
 
-  private func requireAvailable() throws(CaptureDriverError) {
-    guard !isShutdown else {
+  private func beginOperation() throws(CaptureDriverError) {
+    switch phase {
+    case .idle:
+      phase = .operating
+    case .operating:
+      throw .deviceBusy(snapshotValue.descriptor.deviceID)
+    case .shutdown:
       throw .deviceDisconnected(snapshotValue.descriptor.deviceID)
     }
-    guard reference.value.isConnected else {
-      throw .deviceDisconnected(snapshotValue.descriptor.deviceID)
+  }
+
+  private func finishOperation() {
+    guard phase == .operating else {
+      return
     }
-    guard !reference.value.isSuspended else {
-      throw .deviceSuspended(snapshotValue.descriptor.deviceID)
-    }
+    phase = .idle
   }
 }

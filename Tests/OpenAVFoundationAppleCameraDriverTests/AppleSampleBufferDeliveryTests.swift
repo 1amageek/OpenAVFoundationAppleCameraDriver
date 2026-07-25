@@ -59,10 +59,41 @@ struct AppleSampleBufferDeliveryTests {
         let sink = SampleSinkProbe(disposition: .accepted)
         let terminal = InvocationProbe()
         let failure = FailureProbe()
-        let delivery = try makeDelivery(
+        let driverID = try CaptureDriverID(
+            "apple.avfoundation.camera"
+        )
+        let deviceID = try CaptureDeviceID(
+            driverID: driverID,
+            localID: "test-camera"
+        )
+        let eventSink = RecordingEventSink()
+        let relay = AppleCameraStreamEventRelay(
+            deviceID: deviceID,
+            terminalHandler: {
+                terminal.record()
+            }
+        )
+        try relay.setSink(eventSink)
+        try relay.beginStart()
+        let delivery = AppleSampleBufferDelivery(
+            driverID: driverID,
+            deviceID: deviceID,
+            bridge: try AppleSampleBufferBridge(
+                format: AppleCameraTestFixtures.format(
+                    width: 4,
+                    height: 2
+                )
+            ),
             sink: sink,
-            terminal: terminal,
-            failure: failure
+            failureHandler: { error in
+                failure.record(error)
+            },
+            terminalHandler: {
+                relay.requestStop()
+            },
+            failureEventHandler: { error in
+                relay.offer(.failed(error))
+            }
         )
 
         delivery.offer(
@@ -75,6 +106,11 @@ struct AppleSampleBufferDeliveryTests {
         #expect(sink.invocationCount == 0)
         #expect(terminal.invocationCount == 1)
         #expect(failure.invocationCount == 1)
+        #expect(eventSink.events.count == 1)
+        guard case .failed = eventSink.events[0] else {
+            Issue.record("Bridge failure did not emit a terminal event")
+            return
+        }
     }
 
     @Test("Shutdown waits for the accepted in-flight offer")

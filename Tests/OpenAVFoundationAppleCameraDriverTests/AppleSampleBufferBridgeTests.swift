@@ -1,5 +1,8 @@
 import CoreImage
+import CoreMedia
 import CoreVideo
+import Foundation
+import OpenCoreMedia
 import OpenCoreVideo
 import Testing
 
@@ -25,6 +28,33 @@ struct AppleSampleBufferBridgeTests {
       observedByte = bytes[0]
     }
     #expect(observedByte == 0xA7)
+  }
+
+  @Test("Bridge retains the exact native pixel-buffer owner")
+  func nativePixelBufferIdentity() throws {
+    let bridge = try AppleSampleBufferBridge(
+      format: AppleCameraTestFixtures.format(
+        width: 4,
+        height: 2
+      )
+    )
+    let nativeSample = try AppleCameraTestFixtures.sampleBuffer(
+      width: 4,
+      height: 2
+    )
+    let nativeImage = try #require(
+      CMSampleBufferGetImageBuffer(nativeSample)
+    )
+    let sample = try bridge.sample(from: nativeSample)
+    let image = try #require(
+      sample.imageBuffer() as? AppleCameraPixelBuffer
+    )
+
+    var preservesIdentity = false
+    image.withCoreVideoPixelBuffer { projectedImage in
+      preservesIdentity = projectedImage === nativeImage
+    }
+    #expect(preservesIdentity)
   }
 
   @Test("Bridge reuses immutable format metadata")
@@ -101,7 +131,9 @@ struct AppleSampleBufferBridgeTests {
       pixelFormat: pixelFormat,
       fillByte: 0x6B
     )
-    let image = try sample.imageBuffer()
+    let image = try #require(
+      sample.imageBuffer() as? AppleCameraPixelBuffer
+    )
 
     #expect(image.isPlanar)
     #expect(image.planeCount == 2)
@@ -132,7 +164,9 @@ struct AppleSampleBufferBridgeTests {
       pixelFormat: pixelFormat,
       fillByte: 0x70
     )
-    let image = try sample.imageBuffer()
+    let image = try #require(
+      sample.imageBuffer() as? AppleCameraPixelBuffer
+    )
 
     var renderedImage: CGImage?
     image.withCoreVideoPixelBuffer { nativeBuffer in
@@ -163,6 +197,160 @@ struct AppleSampleBufferBridgeTests {
 
     #expect(throws: AppleSampleBridgeError.self) {
       _ = try bridge.sample(from: appleSample)
+    }
+  }
+
+  @Test("Bridge preserves image, bearer, and per-sample attachments")
+  func attachmentMapping() throws {
+    let bridge = try AppleSampleBufferBridge(
+      format: AppleCameraTestFixtures.format(
+        width: 4,
+        height: 2
+      )
+    )
+    let nativeSample = try AppleCameraTestFixtures.sampleBuffer(
+      width: 4,
+      height: 2
+    )
+    let nativeImage = try #require(
+      CMSampleBufferGetImageBuffer(nativeSample)
+    )
+    let imageKey = "test.image.metadata" as CFString
+    let imageValue: NSDictionary = [
+      "nested": NSArray(array: [true, 7, "camera"])
+    ]
+    CVBufferSetAttachment(
+      nativeImage,
+      imageKey,
+      imageValue,
+      .shouldPropagate
+    )
+    CVBufferSetAttachment(
+      nativeImage,
+      "test.image.private" as CFString,
+      NSNumber(value: UInt64.max),
+      .shouldNotPropagate
+    )
+
+    let bearerKey = "test.sample.bearer" as CFString
+    CMSetAttachment(
+      nativeSample,
+      key: bearerKey,
+      value: "retained" as CFString,
+      attachmentMode: kCMAttachmentMode_ShouldNotPropagate
+    )
+    let bearerValue: NSArray = [
+      NSNumber(value: 2.5),
+      NSDictionary(dictionary: ["role": "preview"]),
+    ]
+    CMSetAttachment(
+      nativeSample,
+      key: "test.sample.propagated" as CFString,
+      value: bearerValue,
+      attachmentMode: kCMAttachmentMode_ShouldPropagate
+    )
+    let nativeSampleAttachments = try #require(
+      CMSampleBufferGetSampleAttachmentsArray(
+        nativeSample,
+        createIfNecessary: true
+      )
+    )
+    let rawDictionary = try #require(
+      CFArrayGetValueAtIndex(nativeSampleAttachments, 0)
+    )
+    let sampleDictionary = Unmanaged<NSMutableDictionary>
+      .fromOpaque(rawDictionary)
+      .takeUnretainedValue()
+    sampleDictionary["test.sample.flag"] = [
+      "nested": [true, "frame"]
+    ]
+
+    let sample = try bridge.sample(from: nativeSample)
+    let image = try #require(
+      sample.imageBuffer() as? AppleCameraPixelBuffer
+    )
+    #expect(
+      image.attachments.attachment(
+        for: CVAttachmentKey(rawValue: "test.image.metadata")
+      )
+        == CVBufferAttachment(
+          value: .dictionary([
+            "nested": .array([
+              .boolean(true),
+              .integer(7),
+              .string("camera"),
+            ])
+          ]),
+          mode: .shouldPropagate
+        )
+    )
+    #expect(
+      image.attachments.attachment(
+        for: CVAttachmentKey(rawValue: "test.image.private")
+      )
+        == CVBufferAttachment(
+          value: .unsignedInteger(UInt64.max),
+          mode: .shouldNotPropagate
+        )
+    )
+    #expect(
+      sample.attachments["test.sample.bearer"]
+        == .shouldNotPropagate(.string("retained"))
+    )
+    #expect(
+      sample.attachments["test.sample.propagated"]
+        == .shouldPropagate(
+          .array([
+            .floatingPoint(2.5),
+            .dictionary(["role": .string("preview")]),
+          ])
+        )
+    )
+    let portableSampleAttachments = try #require(
+      sample.sampleAttachments(createIfNecessary: false)
+    )
+    #expect(
+      try portableSampleAttachments.attachment(at: 0)[
+        rawAttachment: "test.sample.flag"
+      ] == .dictionary([
+        "nested": .array([
+          .boolean(true),
+          .string("frame"),
+        ])
+      ])
+    )
+  }
+
+  @Test("Unsupported native attachment values fail explicitly")
+  func unsupportedAttachmentValue() throws {
+    let bridge = try AppleSampleBufferBridge(
+      format: AppleCameraTestFixtures.format(
+        width: 4,
+        height: 2
+      )
+    )
+    let nativeSample = try AppleCameraTestFixtures.sampleBuffer(
+      width: 4,
+      height: 2
+    )
+    let nativeImage = try #require(
+      CMSampleBufferGetImageBuffer(nativeSample)
+    )
+    CVBufferSetAttachment(
+      nativeImage,
+      "test.unsupported" as CFString,
+      NSDate(timeIntervalSince1970: 0),
+      .shouldNotPropagate
+    )
+
+    do {
+      _ = try bridge.sample(from: nativeSample)
+      Issue.record("An unsupported attachment must not be dropped")
+    } catch let error {
+      guard case .attachment(.unsupportedValueType) = error else {
+        Issue.record("Unexpected bridge error: \(error)")
+        return
+      }
     }
   }
 

@@ -31,11 +31,17 @@ public final class AppleCameraPixelBuffer:
   public let attachments = OpenCoreVideo.CVBufferAttachments()
   public let accessCapabilities: OpenCoreVideo.CVPixelBufferAccessCapabilities = .read
 
-  nonisolated(unsafe) private let pixelBuffer: CoreVideo.CVPixelBuffer
+  // This owner stores the unchanged address bits for one +1 Core Foundation
+  // retain and releases it exactly once in deinit. The address is never
+  // offset, rebound, or exposed. It is reconstructed only as the original
+  // opaque pointer. Operations take a strong local reference under a short
+  // mutex lock, then perform Core Video locking and caller callbacks after
+  // releasing the owner mutex.
+  private let nativeOwner: Mutex<UInt>
   private let state = Mutex(State.idle)
 
   init(
-    pixelBuffer: CoreVideo.CVPixelBuffer
+    pixelBuffer: consuming CoreVideo.CVPixelBuffer
   ) throws(OpenCoreVideo.CVPixelBufferError) {
     let dimensions = try OpenCoreVideo.CVPixelDimensions(
       width: CVPixelBufferGetWidth(pixelBuffer),
@@ -92,7 +98,19 @@ public final class AppleCameraPixelBuffer:
     self.planeCount = planeCount
     self.bytesPerRow = bytesPerRow
     self.byteCount = byteCount
-    self.pixelBuffer = pixelBuffer
+    let retainedPointer = Unmanaged
+      .passRetained(pixelBuffer)
+      .toOpaque()
+    nativeOwner = Mutex(UInt(bitPattern: retainedPointer))
+  }
+
+  deinit {
+    let retained = nativeOwner.withLock { address in
+      Unmanaged<CoreVideo.CVPixelBuffer>.fromOpaque(
+        UnsafeRawPointer(bitPattern: address)!
+      )
+    }
+    retained.release()
   }
 
   public func withReadBytes(
@@ -101,7 +119,8 @@ public final class AppleCameraPixelBuffer:
     guard !isPlanar else {
       throw .planarBufferRequiresPlaneAccess
     }
-    try withReadLock {
+    let pixelBuffer = nativePixelBuffer()
+    try withReadLock(pixelBuffer: pixelBuffer) {
       guard
         let baseAddress = CVPixelBufferGetBaseAddress(
           pixelBuffer
@@ -130,6 +149,7 @@ public final class AppleCameraPixelBuffer:
     -> OpenCoreVideo.CVPixelDimensions
   {
     try validatePlane(index)
+    let pixelBuffer = nativePixelBuffer()
     return try OpenCoreVideo.CVPixelDimensions(
       width: CVPixelBufferGetWidthOfPlane(pixelBuffer, index),
       height: CVPixelBufferGetHeightOfPlane(pixelBuffer, index)
@@ -140,6 +160,7 @@ public final class AppleCameraPixelBuffer:
     at index: Int
   ) throws(OpenCoreVideo.CVPixelBufferError) -> Int {
     try validatePlane(index)
+    let pixelBuffer = nativePixelBuffer()
     return CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, index)
   }
 
@@ -147,6 +168,7 @@ public final class AppleCameraPixelBuffer:
     ofPlane index: Int
   ) throws(OpenCoreVideo.CVPixelBufferError) -> Int {
     try validatePlane(index)
+    let pixelBuffer = nativePixelBuffer()
     return try Self.planeByteCount(
       pixelBuffer: pixelBuffer,
       index: index
@@ -158,11 +180,12 @@ public final class AppleCameraPixelBuffer:
     _ body: (borrowing Span<UInt8>) -> Void
   ) throws(OpenCoreVideo.CVPixelBufferError) {
     try validatePlane(index)
+    let pixelBuffer = nativePixelBuffer()
     let planeByteCount = try Self.planeByteCount(
       pixelBuffer: pixelBuffer,
       index: index
     )
-    try withReadLock {
+    try withReadLock(pixelBuffer: pixelBuffer) {
       guard
         let baseAddress = CVPixelBufferGetBaseAddressOfPlane(
           pixelBuffer,
@@ -195,10 +218,11 @@ public final class AppleCameraPixelBuffer:
   public func withCoreVideoPixelBuffer(
     _ body: (CoreVideo.CVPixelBuffer) -> Void
   ) {
-    body(pixelBuffer)
+    body(nativePixelBuffer())
   }
 
   private func withReadLock(
+    pixelBuffer: CoreVideo.CVPixelBuffer,
     _ body: () -> OpenCoreVideo.CVPixelBufferError?
   ) throws(OpenCoreVideo.CVPixelBufferError) {
     let needsNativeLock = try state.withLock {
@@ -268,6 +292,14 @@ public final class AppleCameraPixelBuffer:
     }
   }
 
+  private func nativePixelBuffer() -> CoreVideo.CVPixelBuffer {
+    nativeOwner.withLock { address in
+      Unmanaged<CoreVideo.CVPixelBuffer>
+        .fromOpaque(UnsafeRawPointer(bitPattern: address)!)
+        .takeUnretainedValue()
+    }
+  }
+
   private func validatePlane(
     _ index: Int
   ) throws(OpenCoreVideo.CVPixelBufferError) {
@@ -300,6 +332,10 @@ public final class AppleCameraPixelBuffer:
     byteCount: Int,
     _ body: (borrowing Span<UInt8>) -> Void
   ) {
+    // Core Video owns and initializes this storage for the validated
+    // row-by-height byte count while the native read lock is held. UInt8 has
+    // unit alignment and may inspect any initialized object representation.
+    // The scoped Span cannot outlive the callback or cross a Sendable boundary.
     let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
     let span = Span(
       _unsafeStart: UnsafePointer(bytes),

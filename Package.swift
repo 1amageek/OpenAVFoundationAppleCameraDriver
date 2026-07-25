@@ -1,4 +1,4 @@
-// swift-tools-version: 6.3
+// swift-tools-version: 6.4
 
 import PackageDescription
 
@@ -31,6 +31,7 @@ let package = Package(
         .target(
             name: "OpenAVFoundationAppleCameraDriver",
             dependencies: [
+                "AppleCameraExceptionBridge",
                 "OpenCoreMedia",
                 "OpenCoreVideo",
                 .product(
@@ -38,6 +39,10 @@ let package = Package(
                     package: "OpenAVFoundationDriver"
                 )
             ]
+        ),
+        .target(
+            name: "AppleCameraExceptionBridge",
+            publicHeadersPath: "include"
         ),
         .testTarget(
             name: "OpenAVFoundationAppleCameraDriverTests",
