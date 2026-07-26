@@ -57,6 +57,35 @@ struct AppleSampleBufferBridgeTests {
     #expect(preservesIdentity)
   }
 
+  @Test("Bridge preserves native sample timing exactly")
+  func sampleTiming() throws {
+    let bridge = try AppleSampleBufferBridge(
+      format: AppleCameraTestFixtures.format(
+        width: 4,
+        height: 2
+      )
+    )
+    let nativeSample = try AppleCameraTestFixtures.sampleBuffer(
+      width: 4,
+      height: 2
+    )
+    let sample = try bridge.sample(from: nativeSample)
+    let timing = try sample.timingInfo(at: 0)
+
+    expectEquivalent(
+      timing.duration,
+      CMSampleBufferGetDuration(nativeSample)
+    )
+    expectEquivalent(
+      timing.presentationTimeStamp,
+      CMSampleBufferGetPresentationTimeStamp(nativeSample)
+    )
+    expectEquivalent(
+      timing.decodeTimeStamp,
+      CMSampleBufferGetDecodeTimeStamp(nativeSample)
+    )
+  }
+
   @Test("Bridge reuses immutable format metadata")
   func formatDescriptionIdentity() throws {
     let bridge = try AppleSampleBufferBridge(
@@ -378,5 +407,15 @@ struct AppleSampleBufferBridgeTests {
       fillByte: fillByte
     )
     return try bridge.sample(from: appleSample)
+  }
+
+  private func expectEquivalent(
+    _ portable: OpenCoreMedia.CMTime,
+    _ native: CoreMedia.CMTime
+  ) {
+    #expect(portable.value == native.value)
+    #expect(portable.timescale == native.timescale)
+    #expect(portable.flags.rawValue == native.flags.rawValue)
+    #expect(portable.epoch == native.epoch)
   }
 }

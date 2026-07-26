@@ -39,8 +39,10 @@ CaptureSampleSink
 
 The bridge creates one immutable format description per negotiated stream and
 reuses it for every sample. `CMImageSampleBuffer` stores its single image timing
-value directly rather than retaining a one-element timing array. The public
-array-taking API and its boundary value remain, so the pipeline does not claim
+value directly rather than retaining a one-element timing array. The bridge
+uses OpenCoreMedia's scalar-timing overload, so it does not construct a
+single-element timing array on each callback. Per-frame owner and sample
+facades remain intentional allocations, so the pipeline does not claim
 whole-frame zero-allocation.
 
 `AppleCameraPixelBuffer` owns one `+1` retain of the Apple `CVPixelBuffer` and

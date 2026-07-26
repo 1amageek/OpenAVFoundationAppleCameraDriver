@@ -115,7 +115,7 @@ struct AppleSampleBufferBridge: Sendable {
       sample = try SampleBuffer(
         imageBuffer: imageBuffer,
         formatDescription: formatDescription,
-        timing: [timing]
+        timing: timing
       )
     } catch {
       throw .sampleBuffer(error)

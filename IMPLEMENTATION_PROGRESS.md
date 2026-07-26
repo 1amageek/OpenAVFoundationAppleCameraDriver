@@ -21,6 +21,7 @@
 - [x] one fused Apple pixel-buffer owner/view without a copied storage allocation
 - [x] negotiated pixel format and dimension request with per-frame validation
 - [x] stream-scoped immutable format-description reuse
+- [x] scalar sample timing without a per-frame one-element array
 - [x] synchronized delivery gate and bounded in-flight shutdown
 - [x] callback-safe native termination request
 - [x] Native NV12 full-range and video-range output
@@ -62,7 +63,7 @@
 ## Verification
 
 - [x] 55 deterministic native driver behavior tests pass with the Swift 6.4
-      snapshot against the resolved URL dependency graph
+      snapshot against resolved OpenCoreMedia `e5495c7`
 - [x] the same deterministic suite passes with Thread Sanitizer enabled
 - [x] one opt-in live-camera test compiles and is skipped by the deterministic
       run; the xctest host is not currently camera-authorized
@@ -76,6 +77,8 @@
 - [x] native pixel-format advertising policy passes
 - [x] format-description reuse, dimension rejection, and pixel-format rejection
       pass
+- [x] scalar-timing bridge path passes 10 focused timing, owner, NV12, format,
+      and attachment tests with the Swift 6.4 snapshot
 - [x] sink stop, failure stop, queued delivery rejection, and in-flight shutdown
       pass
 - [x] frame-rate range validation and reciprocal duration policy pass
