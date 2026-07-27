@@ -6,11 +6,11 @@ enum AppleCameraVideoConnectionBridge {
     throws(CaptureContractError) -> CaptureVideoConnectionCapabilities
   {
     try CaptureVideoConnectionCapabilities(
-      supportedOrientations: [
-        .portrait,
-        .portraitUpsideDown,
-        .landscapeRight,
-        .landscapeLeft,
+      supportedRotationAngles: [
+        .zero,
+        .clockwise90,
+        .clockwise180,
+        .clockwise270,
       ],
       supportedStabilizationModes: [],
       supportedMirroringModes: [
@@ -27,16 +27,16 @@ enum AppleCameraVideoConnectionBridge {
     deviceID: CaptureDeviceID,
     streamID: CaptureStreamID
   ) throws(CaptureDriverError) {
-    if let orientation = configuration.orientation {
-      let angle = rotationAngle(for: orientation)
-      guard connection.isVideoRotationAngleSupported(angle) else {
-        throw .unsupportedVideoOrientation(
+    if let rotationAngle = configuration.rotationAngle {
+      let nativeAngle = CGFloat(rotationAngle.rawValue)
+      guard connection.isVideoRotationAngleSupported(nativeAngle) else {
+        throw .unsupportedVideoRotationAngle(
           deviceID: deviceID,
           streamID: streamID,
-          orientation: orientation
+          angle: rotationAngle
         )
       }
-      connection.videoRotationAngle = angle
+      connection.videoRotationAngle = nativeAngle
     }
     if let mode = configuration.stabilizationMode {
       throw .unsupportedVideoStabilizationMode(
@@ -78,13 +78,13 @@ enum AppleCameraVideoConnectionBridge {
     deviceID: CaptureDeviceID,
     streamID: CaptureStreamID
   ) throws(CaptureDriverError) {
-    if let orientation = configuration.orientation {
-      let expectedAngle = rotationAngle(for: orientation)
+    if let rotationAngle = configuration.rotationAngle {
+      let expectedAngle = CGFloat(rotationAngle.rawValue)
       guard connection.videoRotationAngle == expectedAngle else {
-        throw .unsupportedVideoOrientation(
+        throw .unsupportedVideoRotationAngle(
           deviceID: deviceID,
           streamID: streamID,
-          orientation: orientation
+          angle: rotationAngle
         )
       }
     }
@@ -116,21 +116,6 @@ enum AppleCameraVideoConnectionBridge {
           mode: mode
         )
       }
-    }
-  }
-
-  static func rotationAngle(
-    for orientation: CaptureVideoOrientation
-  ) -> CGFloat {
-    switch orientation {
-    case .portrait:
-      90
-    case .portraitUpsideDown:
-      270
-    case .landscapeRight:
-      0
-    case .landscapeLeft:
-      180
     }
   }
 }

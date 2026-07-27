@@ -38,14 +38,14 @@ enum AppleCameraTestFixtures {
       nil,
       &pixelBuffer
     )
-    guard pixelStatus == kCVReturnSuccess,
+    guard pixelStatus == CoreVideo.kCVReturnSuccess,
       let pixelBuffer
     else {
       throw FixtureError.pixelBufferCreation(pixelStatus)
     }
 
     let lockStatus = CVPixelBufferLockBaseAddress(pixelBuffer, [])
-    guard lockStatus == kCVReturnSuccess else {
+    guard lockStatus == CoreVideo.kCVReturnSuccess else {
       throw FixtureError.pixelBufferLock(lockStatus)
     }
     if CVPixelBufferIsPlanar(pixelBuffer) {
@@ -87,7 +87,7 @@ enum AppleCameraTestFixtures {
       )
     }
     let unlockStatus = CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-    guard unlockStatus == kCVReturnSuccess else {
+    guard unlockStatus == CoreVideo.kCVReturnSuccess else {
       throw FixtureError.pixelBufferUnlock(unlockStatus)
     }
 

@@ -246,7 +246,7 @@ public final class AppleCameraPixelBuffer:
         pixelBuffer,
         .readOnly
       )
-      guard lockStatus == kCVReturnSuccess else {
+      guard lockStatus == CoreVideo.kCVReturnSuccess else {
         state.withLock { state in
           state = .idle
         }
@@ -277,7 +277,7 @@ public final class AppleCameraPixelBuffer:
         pixelBuffer,
         .readOnly
       )
-      guard unlockStatus == kCVReturnSuccess else {
+      guard unlockStatus == CoreVideo.kCVReturnSuccess else {
         state.withLock { state in
           state = .failed(unlockStatus)
         }

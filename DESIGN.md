@@ -142,11 +142,11 @@ delivered exactly once before termination, and without a sink the same relay
 still requests backend stop. External sinks and terminal callbacks execute
 outside the relay mutex.
 
-Video connection configuration maps the four portable orientations to native
-rotation angles, applies mirroring policy only when the connection reports
-support, and validates the resulting native properties. Stabilization is not
-available in the macOS API and is therefore neither advertised nor silently
-ignored.
+Video connection configuration passes the four portable quarter-turn rotation
+angles to the native rotation-angle API, applies mirroring policy only when the
+connection reports support, and validates the resulting native properties.
+Stabilization is not available in the macOS API and is therefore neither
+advertised nor silently ignored.
 
 Sink stop, bridge failure, and explicit shutdown first close a synchronized
 delivery gate. Explicit shutdown waits for a bounded in-flight sink offer,

@@ -207,31 +207,15 @@ struct AppleCameraStreamEventTests {
     )
   }
 
-  @Test("Portable orientation uses supported native rotation angles")
+  @Test("Portable rotation capabilities use native quarter turns")
   func rotationAngles() throws {
+    let capabilities = try AppleCameraVideoConnectionBridge.capabilities()
     #expect(
-      AppleCameraVideoConnectionBridge.rotationAngle(
-        for: .landscapeRight
-      ) == 0
+      capabilities.supportedRotationAngles
+        == [.zero, .clockwise90, .clockwise180, .clockwise270]
     )
     #expect(
-      AppleCameraVideoConnectionBridge.rotationAngle(
-        for: .portrait
-      ) == 90
-    )
-    #expect(
-      AppleCameraVideoConnectionBridge.rotationAngle(
-        for: .landscapeLeft
-      ) == 180
-    )
-    #expect(
-      AppleCameraVideoConnectionBridge.rotationAngle(
-        for: .portraitUpsideDown
-      ) == 270
-    )
-    #expect(
-      try AppleCameraVideoConnectionBridge.capabilities()
-        .supportedStabilizationModes.isEmpty
+      capabilities.supportedStabilizationModes.isEmpty
     )
   }
 }

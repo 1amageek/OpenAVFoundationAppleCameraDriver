@@ -104,7 +104,7 @@ struct AppleCameraDeviceHandleTests {
     _ = try await handle.configure(configuration)
     let connectionConfiguration =
       CaptureVideoConnectionConfiguration(
-        orientation: .portrait,
+        rotationAngle: .clockwise90,
         mirroringMode: .disabled
       )
 
@@ -360,7 +360,6 @@ private struct HandleFixture {
       revision: 1,
       formats: [format],
       preferredFormatID: formatID,
-      supportsConcurrentStreams: false,
       streams: [stream],
       supportedStreamCombinations: [
         try CaptureStreamCombination(streamIDs: [streamID])

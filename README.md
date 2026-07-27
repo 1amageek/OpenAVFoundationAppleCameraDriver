@@ -34,7 +34,7 @@ the legacy duration setters and device controls share one Objective-C
 transaction and rollback boundary so failures remain typed. Device observation
 emits one authoritative snapshot before native connection and disconnection
 deltas. Streams expose ordered interruption, resume, dropped-frame, and terminal
-failure events, plus validated orientation and mirroring configuration.
+failure events, plus validated rotation-angle and mirroring configuration.
 See [LOW_LEVEL_PIPELINE.md](LOW_LEVEL_PIPELINE.md) for ownership, allocation, and
 future move-only and GPU presentation boundaries.
 

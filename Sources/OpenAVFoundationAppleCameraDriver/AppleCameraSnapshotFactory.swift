@@ -107,7 +107,6 @@ struct AppleCameraSnapshotFactory: Sendable {
       revision: revision,
       formats: formats,
       preferredFormatID: preferredFormatID,
-      supportsConcurrentStreams: false,
       controls: controls,
       streams: [videoStream],
       supportedStreamCombinations: [videoStreamCombination]

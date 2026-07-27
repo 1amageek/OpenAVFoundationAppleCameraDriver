@@ -20,14 +20,14 @@ struct AppleCameraPixelBufferTests {
       nil,
       &pixelBuffer
     )
-    #expect(status == kCVReturnSuccess)
+    #expect(status == CoreVideo.kCVReturnSuccess)
     let buffer = try #require(pixelBuffer)
     let openBuffer = try AppleCameraPixelBuffer(
       pixelBuffer: buffer
     )
 
     let lockStatus = CVPixelBufferLockBaseAddress(buffer, .readOnly)
-    #expect(lockStatus == kCVReturnSuccess)
+    #expect(lockStatus == CoreVideo.kCVReturnSuccess)
     let expectedAddress = CVPixelBufferGetBaseAddress(buffer).map {
       UInt(bitPattern: $0)
     }
@@ -52,7 +52,7 @@ struct AppleCameraPixelBufferTests {
       nil,
       &pixelBuffer
     )
-    #expect(status == kCVReturnSuccess)
+    #expect(status == CoreVideo.kCVReturnSuccess)
     let openBuffer = try AppleCameraPixelBuffer(
       pixelBuffer: try #require(pixelBuffer)
     )
@@ -106,7 +106,7 @@ struct AppleCameraPixelBufferTests {
       nil,
       &pixelBuffer
     )
-    guard status == kCVReturnSuccess else {
+    guard status == CoreVideo.kCVReturnSuccess else {
       Unmanaged<NativePixelReleaseProbe>
         .fromOpaque(releaseContext)
         .release()
@@ -142,7 +142,7 @@ struct AppleCameraPixelBufferTests {
       nil,
       &pixelBuffer
     )
-    #expect(status == kCVReturnSuccess)
+    #expect(status == CoreVideo.kCVReturnSuccess)
     let buffer = try #require(pixelBuffer)
     let openBuffer = try AppleCameraPixelBuffer(
       pixelBuffer: buffer
@@ -159,7 +159,7 @@ struct AppleCameraPixelBufferTests {
     )
 
     let lockStatus = CVPixelBufferLockBaseAddress(buffer, .readOnly)
-    #expect(lockStatus == kCVReturnSuccess)
+    #expect(lockStatus == CoreVideo.kCVReturnSuccess)
     let expectedAddress = CVPixelBufferGetBaseAddressOfPlane(
       buffer,
       1
@@ -240,7 +240,7 @@ struct AppleCameraPixelBufferTests {
       nil,
       &textureCache
     )
-    #expect(cacheStatus == kCVReturnSuccess)
+    #expect(cacheStatus == CoreVideo.kCVReturnSuccess)
     let cache = try #require(textureCache)
 
     let attributes = [
@@ -256,7 +256,7 @@ struct AppleCameraPixelBufferTests {
       attributes,
       &nativePixelBuffer
     )
-    #expect(pixelStatus == kCVReturnSuccess)
+    #expect(pixelStatus == CoreVideo.kCVReturnSuccess)
     let original = try #require(nativePixelBuffer)
     let originalIdentity = ObjectIdentifier(original)
     let openBuffer = try AppleCameraPixelBuffer(
@@ -287,7 +287,7 @@ struct AppleCameraPixelBufferTests {
     }
 
     #expect(projectedIdentity == originalIdentity)
-    #expect(projectionStatus == kCVReturnSuccess)
+    #expect(projectionStatus == CoreVideo.kCVReturnSuccess)
     #expect(metalTexture != nil)
   }
 }
